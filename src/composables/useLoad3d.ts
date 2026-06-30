@@ -8,6 +8,7 @@ import { useChainCallback } from '@/composables/functional/useChainCallback'
 import type Load3d from '@/extensions/core/load3d/Load3d'
 import Load3dUtils from '@/extensions/core/load3d/Load3dUtils'
 import { createLoad3d } from '@/extensions/core/load3d/createLoad3d'
+import { isLoad3dPreviewNode } from '@/extensions/core/load3d/nodeTypes'
 import {
   isAssetPreviewSupported,
   persistThumbnail
@@ -192,6 +193,7 @@ export const useLoad3d = (nodeOrRef: MaybeRef<LGraphNode | null>) => {
       const heightWidget = node.widgets?.find((w) => w.name === 'height')
 
       if (
+        isLoad3dPreviewNode(node.constructor.comfyClass ?? '') ||
         node.constructor.comfyClass?.startsWith('Preview') ||
         !(widthWidget && heightWidget)
       ) {

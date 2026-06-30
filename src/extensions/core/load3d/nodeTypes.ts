@@ -6,7 +6,10 @@
 const LOAD3D_PREVIEW_NODES = new Set([
   'Preview3D',
   'PreviewGaussianSplat',
-  'PreviewPointCloud'
+  'PreviewPointCloud',
+  'Save3DAdvanced',
+  'SaveGaussianSplat',
+  'SavePointCloud'
 ])
 
 const LOAD3D_ALL_NODES = new Set([
