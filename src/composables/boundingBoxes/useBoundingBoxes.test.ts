@@ -8,13 +8,31 @@ import { useBoundingBoxes } from './useBoundingBoxes'
 import type { BoundingBox } from '@/types/boundingBoxes'
 import { toNodeId } from '@/types/nodeId'
 
-const { appState } = vi.hoisted(() => ({
-  appState: { node: null as unknown }
+const { appState, outputState } = vi.hoisted(() => ({
+  appState: { node: null as unknown },
+  outputState: {
+    outputs: undefined as unknown,
+    nodeOutputs: null as { value: Record<string, unknown> } | null
+  }
 }))
 
 vi.mock('@/scripts/app', () => ({
   app: { canvas: { graph: { getNodeById: () => appState.node } } }
 }))
+
+vi.mock('@/stores/nodeOutputStore', async () => {
+  const { ref } = await import('vue')
+  const nodeOutputs = ref<Record<string, unknown>>({})
+  outputState.nodeOutputs = nodeOutputs
+  return {
+    useNodeOutputStore: () => ({
+      nodeOutputs,
+      nodePreviewImages: ref({}),
+      getNodeImageUrls: () => undefined,
+      getNodeOutputs: () => outputState.outputs
+    })
+  }
+})
 
 const ctx = {
   measureText: (s: string) => ({ width: s.length * 7 }),
@@ -27,6 +45,9 @@ const ctx = {
   save: () => {},
   restore: () => {},
   beginPath: () => {},
+  moveTo: () => {},
+  arc: () => {},
+  fill: () => {},
   rect: () => {},
   clip: () => {},
   font: '',
@@ -128,9 +149,23 @@ const box = (over: Partial<BoundingBox> = {}): BoundingBox => ({
   ...over
 })
 
+function makeConnectedNode() {
+  return {
+    widgets: [
+      { name: 'width', value: 512 },
+      { name: 'height', value: 512 }
+    ],
+    findInputSlot: (name: string) => (name === 'bboxes' ? 1 : -1),
+    getInputNode: () => null,
+    isInputConnected: () => true
+  }
+}
+
 beforeEach(() => {
   setActivePinia(createPinia())
   appState.node = makeNode()
+  outputState.outputs = undefined
+  if (outputState.nodeOutputs) outputState.nodeOutputs.value = {}
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
     void Promise.resolve().then(() => cb(0))
     return 1
@@ -236,6 +271,77 @@ describe('useBoundingBoxes inline editor', () => {
     await flush()
     c.onInlineKeyDown({ key: 'Escape' } as KeyboardEvent)
     expect(c.inlineEditor.value).toBeNull()
+  })
+})
+
+describe('useBoundingBoxes incoming bboxes input', () => {
+  it('overrides the canvas when the bboxes input is connected', () => {
+    appState.node = makeConnectedNode()
+    outputState.outputs = {
+      input_bboxes: [box({ x: 0, y: 0, width: 100, height: 100 })]
+    }
+    const c = setup([])
+    expect(c.modelValue.value).toHaveLength(1)
+    expect(c.modelValue.value[0].width).toBe(100)
+  })
+
+  it('replaces existing drawn boxes with the incoming ones', () => {
+    appState.node = makeConnectedNode()
+    outputState.outputs = { input_bboxes: [box({ x: 0, width: 100 })] }
+    const c = setup([box({ x: 200, width: 300 }), box({ x: 400, width: 50 })])
+    expect(c.modelValue.value).toHaveLength(1)
+    expect(c.modelValue.value[0].width).toBe(100)
+  })
+
+  it('ignores incoming output when the input is not connected', () => {
+    outputState.outputs = { input_bboxes: [box({ x: 0, width: 100 })] }
+    const c = setup([])
+    expect(c.modelValue.value).toHaveLength(0)
+  })
+
+  it('applies incoming boxes when outputs stream in after mount', async () => {
+    appState.node = makeConnectedNode()
+    const c = setup([])
+    expect(c.modelValue.value).toHaveLength(0)
+
+    outputState.outputs = { input_bboxes: [box({ x: 0, width: 100 })] }
+    outputState.nodeOutputs!.value = { updated: true }
+    await flush()
+
+    expect(c.modelValue.value).toHaveLength(1)
+    expect(c.modelValue.value[0].width).toBe(100)
+  })
+})
+
+describe('useBoundingBoxes grid snapping', () => {
+  it('snaps a drawn box to the grid when grid is enabled (default)', async () => {
+    const c = setup()
+    c.onPointerDown(pe(10, 10))
+    c.onCanvasPointerMove(pe(60, 60))
+    c.onDocPointerUp(pe(60, 60))
+    await flush()
+    expect(c.modelValue.value).toHaveLength(1)
+    expect(c.modelValue.value[0].x).toBe(64)
+    expect(c.modelValue.value[0].width).toBe(256)
+  })
+
+  it('does not snap when grid is disabled', async () => {
+    const c = setup()
+    c.grid.value = false
+    c.onPointerDown(pe(10, 10))
+    c.onCanvasPointerMove(pe(55, 55))
+    c.onDocPointerUp(pe(55, 55))
+    await flush()
+    expect(c.modelValue.value[0].width).toBe(230)
+  })
+
+  it('keeps the anchored edge fixed when resizing a single edge', async () => {
+    const c = setup([box({ x: 51, y: 51, width: 256, height: 256 })])
+    c.onPointerDown(pe(60, 30))
+    c.onCanvasPointerMove(pe(80, 30))
+    c.onDocPointerUp(pe(80, 30))
+    await flush()
+    expect(c.modelValue.value[0].x).toBe(51)
   })
 })
 

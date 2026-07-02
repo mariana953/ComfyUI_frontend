@@ -65,49 +65,51 @@ const isOpen = ref(false)
 <template>
   <PopoverRoot v-model:open="isOpen">
     <PopoverTrigger as-child>
-      <button
-        type="button"
-        :disabled="$props.disabled"
-        :class="
-          cn(
-            'flex h-8 w-full items-center overflow-clip rounded-lg border border-transparent bg-component-node-widget-background pr-2 outline-none hover:bg-component-node-widget-background-hovered disabled:cursor-not-allowed disabled:opacity-50',
-            isOpen && 'border-node-stroke',
-            $props.class
-          )
-        "
-      >
-        <div class="flex size-8 shrink-0 items-center justify-center">
-          <div class="relative size-4 overflow-hidden rounded-sm">
-            <div
-              class="absolute inset-0"
-              :style="{
-                backgroundImage:
-                  'repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%)',
-                backgroundSize: '4px 4px'
-              }"
-            />
-            <div
-              class="absolute inset-0"
-              :style="{ backgroundColor: previewColor }"
-            />
-          </div>
-        </div>
-        <div
-          class="flex flex-1 items-center justify-between pl-1 text-xs text-component-node-foreground"
+      <slot name="trigger">
+        <button
+          type="button"
+          :disabled="$props.disabled"
+          :class="
+            cn(
+              'flex h-8 w-full items-center overflow-clip rounded-lg border border-transparent bg-component-node-widget-background pr-2 outline-none hover:bg-component-node-widget-background-hovered disabled:cursor-not-allowed disabled:opacity-50',
+              isOpen && 'border-node-stroke',
+              $props.class
+            )
+          "
         >
-          <template v-if="displayMode === 'hex'">
-            <span>{{ displayHex }}</span>
-          </template>
-          <template v-else>
-            <div class="flex gap-2">
-              <span>{{ baseRgb.r }}</span>
-              <span>{{ baseRgb.g }}</span>
-              <span>{{ baseRgb.b }}</span>
+          <div class="flex size-8 shrink-0 items-center justify-center">
+            <div class="relative size-4 overflow-hidden rounded-sm">
+              <div
+                class="absolute inset-0"
+                :style="{
+                  backgroundImage:
+                    'repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%)',
+                  backgroundSize: '4px 4px'
+                }"
+              />
+              <div
+                class="absolute inset-0"
+                :style="{ backgroundColor: previewColor }"
+              />
             </div>
-          </template>
-          <span>{{ hsva.a }}%</span>
-        </div>
-      </button>
+          </div>
+          <div
+            class="flex flex-1 items-center justify-between pl-1 text-xs text-component-node-foreground"
+          >
+            <template v-if="displayMode === 'hex'">
+              <span>{{ displayHex }}</span>
+            </template>
+            <template v-else>
+              <div class="flex gap-2">
+                <span>{{ baseRgb.r }}</span>
+                <span>{{ baseRgb.g }}</span>
+                <span>{{ baseRgb.b }}</span>
+              </div>
+            </template>
+            <span>{{ hsva.a }}%</span>
+          </div>
+        </button>
+      </slot>
     </PopoverTrigger>
     <PopoverPortal>
       <PopoverContent
