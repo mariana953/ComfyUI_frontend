@@ -3556,6 +3556,7 @@ const translations = {
   },
 
   // Customers page
+  'customers.breadcrumb.home': { en: 'Home', 'zh-CN': '首页' },
   'customers.hero.label': {
     en: 'CUSTOMER STORIES',
     'zh-CN': '客户故事'
