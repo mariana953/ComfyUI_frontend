@@ -819,16 +819,20 @@ export class LinkConnector {
       return
     }
 
-    // Connecting to output. Resolve the source once: re-anchoring the first
-    // link's chain onto the reroute changes its membership immediately.
+    // Connecting to output. Resolve the source and each link's validity once,
+    // before connecting: re-anchoring the first link's chain onto the reroute
+    // changes its membership and origin immediately.
     const result = reroute.findSourceOutput()
     if (!result) return
     const { node, output } = result
 
-    for (const link of this.renderLinks) {
-      if (link.toType !== 'output') continue
-      if (!link.canConnectToOutput(node, output)) continue
-
+    const connectable = this.renderLinks.filter(
+      (link) =>
+        link.toType === 'output' &&
+        link.canConnectToReroute(reroute) &&
+        link.canConnectToOutput(node, output)
+    )
+    for (const link of connectable) {
       link.connectToRerouteOutput(reroute, node, output, this.events)
     }
   }

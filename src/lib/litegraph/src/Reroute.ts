@@ -75,8 +75,23 @@ export class Reroute
   /** Ignores attempts to create an infinite loop. @inheritdoc */
   public set parentId(value) {
     if (value === this.id) return
-    if (this.getReroutes() === null) return
+    if (value !== undefined && this.wouldCreateParentCycle(value)) return
     this._chain.parentId = value
+  }
+
+  /** Walks the proposed parent chain, checking it never returns to this reroute. */
+  private wouldCreateParentCycle(parentId: RerouteId): boolean {
+    const reroutes = this.network.deref()?.reroutes
+    const visited = new Set<RerouteId>([this.id])
+    let nextId: RerouteId | undefined = parentId
+
+    while (nextId !== undefined) {
+      if (visited.has(nextId)) return true
+      visited.add(nextId)
+      nextId = reroutes?.get(nextId)?.parentId
+    }
+
+    return false
   }
 
   public get parent(): Reroute | undefined {
