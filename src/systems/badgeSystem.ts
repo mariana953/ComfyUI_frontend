@@ -111,7 +111,11 @@ function computeCreditsText(pricing: BadgeSources['pricing']): string {
 }
 
 export interface BadgeSystemOptions {
-  graphId: UUID
+  /**
+   * Read live on every recompute: `LGraph.clear()` and `configure()`
+   * reassign the root graph's id, so a captured id goes stale.
+   */
+  resolveGraphId: () => UUID
   resolveNode: (nodeId: NodeId) => LGraphNode | undefined
 }
 
@@ -230,9 +234,10 @@ function gatherSubgraphCredits(
 
 function gatherSources(
   options: BadgeSystemOptions,
+  graphId: UUID,
   nodeId: NodeId
 ): BadgeSources {
-  const { graphId, resolveNode } = options
+  const { resolveNode } = options
   const settingStore = useSettingStore()
   const palette = useColorPaletteStore().completedActivePalette
   const node = resolveNode(nodeId)
@@ -299,10 +304,11 @@ export function startBadgeSystem(options: BadgeSystemOptions): () => void {
     const scope = effectScope(true)
     scope.run(() => {
       watchEffect(() => {
-        const rows = computeBadges(gatherSources(options, nodeId))
+        const graphId = options.resolveGraphId()
+        const rows = computeBadges(gatherSources(options, graphId, nodeId))
         for (const kind of ['core', 'credits'] as const) {
           badgeStore.setBadgesOfKind(
-            options.graphId,
+            graphId,
             nodeId,
             kind,
             rows.filter((row) => row.kind === kind)
@@ -316,7 +322,7 @@ export function startBadgeSystem(options: BadgeSystemOptions): () => void {
   const systemScope = effectScope(true)
   systemScope.run(() => {
     watch(
-      () => badgeStore.registeredNodeIds(options.graphId),
+      () => badgeStore.registeredNodeIds(options.resolveGraphId()),
       (nodeIds) => {
         const live = new Set(nodeIds)
         for (const [nodeId, scope] of nodeScopes) {
