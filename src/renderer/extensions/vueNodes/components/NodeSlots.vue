@@ -15,6 +15,7 @@
         :node-id="nodeData.id"
         :has-error="inputHasError(input)"
         :index="getActualInputIndex(input, index)"
+        :connected="isInputConnected(getActualInputIndex(input, index))"
       />
     </div>
 
@@ -29,6 +30,7 @@
         :node-type="nodeData?.type || ''"
         :node-id="nodeData.id"
         :index="index"
+        :connected="isOutputConnected(index)"
       />
     </div>
   </div>
@@ -47,6 +49,7 @@ import {
   nonWidgetedInputs
 } from '@/renderer/extensions/vueNodes/utils/nodeDataUtils'
 import { useExecutionErrorStore } from '@/stores/executionErrorStore'
+import { useLinkStore } from '@/stores/linkStore'
 import { getLocatorIdFromNodeData } from '@/utils/graphTraversalUtil'
 import { cn } from '@comfyorg/tailwind-utils'
 
@@ -61,13 +64,25 @@ interface NodeSlotsProps {
 const { nodeData, unified = false } = defineProps<NodeSlotsProps>()
 const canvasStore = useCanvasStore()
 const executionErrorStore = useExecutionErrorStore()
+const linkStore = useLinkStore()
 const nodeLocatorId = computed(() => getLocatorIdFromNodeData(nodeData))
+const rootGraphId = computed(() => canvasStore.canvas?.graph?.rootGraph.id)
 
 const linkedWidgetInputs = computed(() =>
-  unified
-    ? linkedWidgetedInputs(nodeData, canvasStore.canvas?.graph?.rootGraph.id)
-    : []
+  unified ? linkedWidgetedInputs(nodeData, rootGraphId.value) : []
 )
+
+function isInputConnected(index: number): boolean {
+  const graphId = rootGraphId.value
+  if (graphId === undefined) return false
+  return linkStore.isInputSlotConnected(graphId, nodeData.id, index)
+}
+
+function isOutputConnected(index: number): boolean {
+  const graphId = rootGraphId.value
+  if (graphId === undefined) return false
+  return linkStore.isOutputSlotConnected(graphId, nodeData.id, index)
+}
 
 const filteredInputs = computed(() => [
   ...nonWidgetedInputs(nodeData),
