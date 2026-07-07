@@ -1,6 +1,7 @@
 import _ from 'es-toolkit/compat'
 
 import type { ColorOption, LGraph } from '@/lib/litegraph/src/litegraph'
+import { toLinkId } from '@/types/linkId'
 import type { ExecutedWsMessage } from '@/schemas/apiSchema'
 import {
   LGraphCanvas,
@@ -13,7 +14,8 @@ import {
 import type {
   ExportedSubgraph,
   ISerialisableNodeInput,
-  ISerialisedGraph
+  ISerialisedGraph,
+  SerialisableGraph
 } from '@/lib/litegraph/src/types/serialisation'
 import type {
   IBaseWidget,
@@ -234,25 +236,29 @@ export function migrateWidgetsValues<TWidgetValue>(
  *
  * @param graph - The graph to fix links for.
  */
-export function fixLinkInputSlots(graph: LGraph) {
-  // Note: We can't use forEachNode here because we need access to the graph's
-  // links map at each level. Links are stored in their respective graph/subgraph.
-  for (const node of graph.nodes) {
-    // Fix links for the current node
-    for (const [inputIndex, input] of node.inputs.entries()) {
-      const linkId = input.link
-      if (!linkId) continue
+export function fixLinkInputSlots(
+  graph: LGraph,
+  data: ISerialisedGraph | SerialisableGraph
+) {
+  // The slot association lives in the serialized node data: node.configure
+  // reorders each serialized inputs array to definition order in place, and
+  // each entry still carries the link id it was saved with. Links are stored
+  // in their respective graph/subgraph.
+  for (const serialisedNode of data.nodes ?? []) {
+    for (const [inputIndex, input] of (serialisedNode.inputs ?? []).entries()) {
+      if (input.link == null) continue
 
-      const link = graph.links.get(linkId)
+      const link = graph.links.get(toLinkId(input.link))
       if (!link) continue
 
       link.target_slot = inputIndex
     }
+  }
 
-    // Recursively fix links in subgraphs
-    if (node.isSubgraphNode?.() && node.subgraph) {
-      fixLinkInputSlots(node.subgraph)
-    }
+  // Recursively fix links in subgraph definitions
+  for (const subgraphData of data.definitions?.subgraphs ?? []) {
+    const subgraph = graph.rootGraph.subgraphs.get(subgraphData.id)
+    if (subgraph) fixLinkInputSlots(subgraph, subgraphData)
   }
 }
 

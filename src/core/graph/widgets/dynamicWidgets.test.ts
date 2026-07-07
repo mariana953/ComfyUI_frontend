@@ -1,6 +1,6 @@
 import { setActivePinia } from 'pinia'
 import { createTestingPinia } from '@pinia/testing'
-import { describe, expect, test, vi } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { LGraph, LGraphNode } from '@/lib/litegraph/src/litegraph'
 import { transformInputSpecV1ToV2 } from '@/schemas/nodeDef/migration'
 import type { InputSpec } from '@/schemas/nodeDefSchema'
@@ -8,6 +8,7 @@ import { useLitegraphService } from '@/services/litegraphService'
 import type { HasInitialMinSize } from '@/services/litegraphService'
 
 setActivePinia(createTestingPinia({ stubActions: false }))
+beforeEach(() => setActivePinia(createTestingPinia({ stubActions: false })))
 type DynamicInputs = ('INT' | 'STRING' | 'IMAGE' | DynamicInputs)[][]
 type TestAutogrowNode = LGraphNode & {
   comfyDynamic: { autogrow: Record<string, unknown> }

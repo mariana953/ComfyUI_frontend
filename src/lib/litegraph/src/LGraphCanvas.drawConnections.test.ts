@@ -80,7 +80,6 @@ function createTestLink(
     inputSlot
   )
   graph._addLink(link)
-  targetNode.inputs[inputSlot].link = linkId
   return link
 }
 

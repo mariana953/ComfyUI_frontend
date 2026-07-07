@@ -51,8 +51,6 @@ function transferInputConnection(
 
   link.target_id = newNode.id
   link.target_slot = newSlotIdx
-  newNode.inputs[newSlotIdx].link = linkId
-  oldNode.inputs[oldSlotIdx].link = null
 }
 
 function transferOutputConnections(

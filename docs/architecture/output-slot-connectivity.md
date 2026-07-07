@@ -123,10 +123,20 @@ a mirror read plus a `slotFloatingLinks` scan), widget value propagation
 (`widgetValuePropagation`), and matchType link revalidation
 (`dynamicWidgets.changeOutputType`).
 
-## Decision 6: Delete the mirror (implemented)
+## Decision 6: Delete the mirrors (implemented; extended to `input.link`)
 
 The runtime `output.links[]` field and all nine of its write sites are
-deleted. The store is the single source; litegraph internals read through
+deleted. The same recipe has since been applied to `input.link`: the
+field is a deprecated warning getter, litegraph and app code read through
+the slotLinks input helpers (`inputHasLink`, `inputLinkId`, `inputLink`)
+or `node.isInputConnected` / `node.getInputLink`, serialization derives
+`inputs[].link` from the store, and the mirror-carried association
+shuffles were reworked — `fixLinkInputSlots` consumes the serialized
+graph data, dynamicWidgets' group rebuilds carry slot→link association
+in a module-scoped WeakMap refreshed from the store, and link
+deduplication selects survivors from the store registration (the
+`repairInputLinks` mirror repair is gone; the derived view cannot be
+wrong). The store is the single source; litegraph internals read through
 the pure helpers in `node/slotLinks.ts` (`outputHasLinks`,
 `outputLinkIds`, `outputLinks`), and `NodeOutputSlot.isConnected`,
 `serialize`, and `configure` derive from the store. Details:
@@ -193,7 +203,6 @@ sites, and field deletion.
 
 Out of scope, each a piece of the deferred `SlotConnection` phase:
 
-- Deleting the `input.link` mirror field (same recipe as Decision 6).
 - Slot entity extraction: `SlotIdentity`, `SlotVisual`, and retiring the
   `NodeInputSlot` / `NodeOutputSlot` class instances and their
   `shallowReactive` graft.

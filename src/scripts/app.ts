@@ -863,7 +863,8 @@ export class ComfyApp {
       }
 
       try {
-        fixLinkInputSlots(this)
+        const [configuredData] = args
+        if (configuredData) fixLinkInputSlots(this, configuredData)
 
         // Fire callbacks before the onConfigure, this is used by widget inputs to setup the config
         triggerCallbackOnAllNodes(this, 'onGraphConfigured')

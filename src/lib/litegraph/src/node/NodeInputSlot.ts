@@ -10,6 +10,7 @@ import type {
 import { LiteGraph } from '@/lib/litegraph/src/litegraph'
 import { NodeSlot } from '@/lib/litegraph/src/node/NodeSlot'
 import { inputHasLink, inputLinkId } from '@/lib/litegraph/src/node/slotLinks'
+import { warnDeprecated } from '@/lib/litegraph/src/utils/feedback'
 import type { IDrawOptions } from '@/lib/litegraph/src/node/NodeSlot'
 import type { SubgraphInput } from '@/lib/litegraph/src/subgraph/SubgraphInput'
 import type { SubgraphOutput } from '@/lib/litegraph/src/subgraph/SubgraphOutput'
@@ -17,7 +18,8 @@ import { isSubgraphInput } from '@/lib/litegraph/src/subgraph/subgraphUtils'
 import type { IBaseWidget } from '@/lib/litegraph/src/types/widgets'
 
 export class NodeInputSlot extends NodeSlot implements INodeInputSlot {
-  link: LinkId | null
+  /** @deprecated Derived from the link store via a warning prototype getter; never written. */
+  declare readonly link?: LinkId | null
   alwaysVisible?: boolean
 
   get isWidgetInputSlot(): boolean {
@@ -43,8 +45,11 @@ export class NodeInputSlot extends NodeSlot implements INodeInputSlot {
     slot: OptionalProps<INodeInputSlot, 'boundingRect'>,
     node: LGraphNode
   ) {
-    super(slot, node)
-    this.link = slot.link
+    // Serialized inputs carry a legacy link mirror; strip it so the base
+    // ctor's Object.assign cannot collide with the deprecated prototype
+    // getter (assigning a getter-only property throws in strict mode).
+    const { link: _legacyLink, ...rest } = slot
+    super(rest, node)
   }
 
   override get isConnected(): boolean {
@@ -95,3 +100,23 @@ export class NodeInputSlot extends NodeSlot implements INodeInputSlot {
     }
   }
 }
+
+/**
+ * Deprecation telemetry for extensions that still read `input.link`.
+ * Returns the store-derived link id; there is deliberately no setter, so
+ * writes throw in strict mode. First-party code uses the slotLinks helpers.
+ */
+Object.defineProperty(NodeInputSlot.prototype, 'link', {
+  get(this: NodeInputSlot): LinkId | null {
+    warnDeprecated(
+      'input.link is deprecated. Read connectivity via node.isInputConnected(slot) / node.getInputLink(slot); mutate via node.connect() / node.disconnectInput().'
+    )
+    const { graph } = this._node
+    if (!graph) return null
+    return (
+      inputLinkId(graph, this._node.id, this._node.inputs.indexOf(this)) ?? null
+    )
+  },
+  configurable: true,
+  enumerable: false
+})

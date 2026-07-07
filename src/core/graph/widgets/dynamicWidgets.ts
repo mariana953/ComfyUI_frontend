@@ -22,6 +22,7 @@ import {
 import { useLitegraphService } from '@/services/litegraphService'
 import { app } from '@/scripts/app'
 import type { ComfyApp } from '@/scripts/app'
+import { inputLink } from '@/lib/litegraph/src/node/slotLinks'
 import { useLinkStore } from '@/stores/linkStore'
 import { useWidgetValueStore } from '@/stores/widgetValueStore'
 import { widgetId } from '@/types/widgetId'
@@ -109,6 +110,7 @@ function dynamicComboWidget(
     if (!node.widgets) throw new Error('Not Reachable')
     const newSpec = value ? options[value] : undefined
 
+    captureCarriedLinks(node)
     const removedInputs = remove(node.inputs, isInGroup)
     for (const widget of remove(node.widgets, isInGroup)) {
       widget.onRemove?.()
@@ -178,13 +180,12 @@ function dynamicComboWidget(
 
     for (const input of removedInputs) {
       const inputIndex = node.inputs.findIndex((inp) => inp.name === input.name)
+      const link = carriedLink(node, input)
       if (inputIndex === -1) {
+        if (link) node.graph?.removeLink(link.id)
         node.inputs.push(input)
         node.removeInput(node.inputs.length - 1)
       } else {
-        node.inputs[inputIndex].link = input.link
-        if (!input.link) continue
-        const link = node.graph?.links?.[input.link]
         if (!link) continue
         link.target_slot = inputIndex
         node.onConnectionsChange?.(
@@ -247,16 +248,39 @@ export function applyDynamicInputs(
   return true
 }
 
+/**
+ * Slot-object → link association carried across the group rebuild shuffles.
+ * The deleted `input.link` mirror used to travel with the slot object; this
+ * registry replaces it for the duration of a rebuild, refreshed from the
+ * link store whenever the inputs array is at rest.
+ */
+const carriedLinks = new WeakMap<INodeInputSlot, LLink>()
+
+function captureCarriedLinks(node: LGraphNode) {
+  const { graph } = node
+  if (!graph) return
+  for (const [index, input] of node.inputs.entries()) {
+    const link = inputLink(graph, node.id, index)
+    if (link) carriedLinks.set(input, link)
+  }
+}
+
+function carriedLink(node: LGraphNode, input: INodeInputSlot) {
+  const link = carriedLinks.get(input)
+  return link && node.graph?.getLink(link.id) ? link : undefined
+}
+
 function spliceInputs(
   node: LGraphNode,
   startIndex: number,
   deleteCount = -1,
   ...toAdd: INodeInputSlot[]
 ): INodeInputSlot[] {
+  captureCarriedLinks(node)
   if (deleteCount < 0) return node.inputs.splice(startIndex)
   const ret = node.inputs.splice(startIndex, deleteCount, ...toAdd)
   node.inputs.slice(startIndex).forEach((input, index) => {
-    const link = input.link && node.graph?.links?.get(input.link)
+    const link = carriedLink(node, input)
     if (link) link.target_slot = startIndex + index
   })
   return ret
@@ -384,11 +408,12 @@ function applyMatchType(node: LGraphNode, inputSpec: InputSpecV2) {
     const input = node.inputs[index]
     if (!input) return
     node.inputs[index] = shallowReactive(input)
+    const existingLink = node.getInputLink(index)
     node.onConnectionsChange?.(
       LiteGraph.INPUT,
       index,
-      !!input.link,
-      input.link ? node.graph?.links?.[input.link] : undefined,
+      !!existingLink,
+      existingLink ?? undefined,
       input
     )
   })
@@ -440,7 +465,10 @@ function addAutogrowGroup(
       (inp) => inp.name === newInput.name
     )) {
       //NOTE: link.target_slot is updated on spliceInputs call
-      newInput.link ??= existingInput.link
+      const carried = carriedLinks.get(existingInput)
+      if (carried && !carriedLinks.has(newInput)) {
+        carriedLinks.set(newInput, carried)
+      }
     }
   }
 
@@ -516,6 +544,13 @@ function autogrowInputDisconnected(index: number, node: AutogrowNode) {
     return
   }
   app.canvas?.setDirty(true, true)
+  // Snapshot each group slot's link before shuffling: donors are always read
+  // pre-shuffle, matching the sequential copy the mirror used to perform.
+  const linkByOrdinal = groupInputs.map((inp) =>
+    node.graph
+      ? inputLink(node.graph, node.id, node.inputs.indexOf(inp))
+      : undefined
+  )
   //groupBy would be nice here, but may not be supported
   for (let column = 0; column < stride; column++) {
     for (
@@ -524,9 +559,7 @@ function autogrowInputDisconnected(index: number, node: AutogrowNode) {
       bubbleOrdinal += stride
     ) {
       const curInput = groupInputs[bubbleOrdinal]
-      curInput.link = groupInputs[bubbleOrdinal + stride].link
-      if (!curInput.link) continue
-      const link = node.graph?.links[curInput.link]
+      const link = linkByOrdinal[bubbleOrdinal + stride]
       if (!link) continue
       const curIndex = node.inputs.findIndex((inp) => inp === curInput)
       if (curIndex === -1) throw new Error('missing input')
@@ -541,7 +574,6 @@ function autogrowInputDisconnected(index: number, node: AutogrowNode) {
     }
     const lastInput = groupInputs.at(column - stride)
     if (!lastInput) continue
-    lastInput.link = null
     node.onConnectionsChange?.(
       LiteGraph.INPUT,
       node.inputs.length + column - stride,
@@ -553,7 +585,12 @@ function autogrowInputDisconnected(index: number, node: AutogrowNode) {
   const removalChecks = groupInputs.slice(min * stride)
   let i
   for (i = removalChecks.length - stride; i >= 0; i -= stride) {
-    if (removalChecks.slice(i, i + stride).some((inp) => inp.link)) break
+    if (
+      removalChecks
+        .slice(i, i + stride)
+        .some((inp) => node.isInputConnected(node.inputs.indexOf(inp)))
+    )
+      break
   }
   const toRemove = removalChecks.slice(i + stride * 2)
   remove(node.inputs, (inp) => toRemove.includes(inp))

@@ -2983,9 +2983,7 @@ export class LGraphNode
     // add to graph links list
     graph._addLink(link)
 
-    // connect in input
     const targetInput = inputNode.inputs[inputIndex]
-    targetInput.link = link.id
     if (targetInput.widget) {
       graph.trigger('node:slot-links:changed', {
         nodeId: inputNode.id,
@@ -3128,8 +3126,6 @@ export class LGraphNode
 
         // is the link we are searching for...
         const input = target.inputs[link_info.target_slot]
-        // remove there
-        input.link = null
         if (input.widget) {
           graph.trigger('node:slot-links:changed', {
             nodeId: target.id,
@@ -3182,8 +3178,6 @@ export class LGraphNode
 
         if (target) {
           const input = target.inputs[link_info.target_slot]
-          // remove other side link
-          input.link = null
           if (input.widget) {
             graph.trigger('node:slot-links:changed', {
               nodeId: target.id,
@@ -3258,7 +3252,6 @@ export class LGraphNode
 
     const link_id = inputLinkId(graph, this.id, slot) ?? null
     if (link_id != null) {
-      this.inputs[slot].link = null
       if (input.widget) {
         graph.trigger('node:slot-links:changed', {
           nodeId: this.id,

@@ -1,4 +1,5 @@
 import { registerLinkTopology } from './LLink'
+import { inputLinkId } from './node/slotLinks'
 
 import type { LGraph } from './LGraph'
 import type { LGraphNode } from './LGraphNode'
@@ -31,12 +32,11 @@ export function selectSurvivorLink(
   ids: LinkId[],
   node: LGraphNode | null
 ): LinkId {
-  if (!node) return ids[0]
+  if (!node?.graph) return ids[0]
 
-  for (const input of node.inputs ?? []) {
-    if (!input) continue
-    const match = ids.find((id) => input.link === id)
-    if (match != null) return match
+  for (const [index] of (node.inputs ?? []).entries()) {
+    const registered = inputLinkId(node.graph, node.id, index)
+    if (registered != null && ids.includes(registered)) return registered
   }
   return ids[0]
 }
@@ -64,22 +64,4 @@ export function purgeOrphanedLinks(
   // removes that entry, so re-assert the survivor's registration afterwards.
   const survivor = graph._links.get(keepId)
   if (survivor) registerLinkTopology(graph, survivor)
-}
-
-/** Ensures input.link on the target node points to the surviving link. */
-export function repairInputLinks(
-  ids: LinkId[],
-  keepId: LinkId,
-  node: LGraphNode | null
-): void {
-  if (!node) return
-
-  const duplicateIds = new Set(ids)
-
-  for (const input of node.inputs ?? []) {
-    if (input?.link == null || input.link === keepId) continue
-    if (duplicateIds.has(input.link)) {
-      input.link = keepId
-    }
-  }
 }

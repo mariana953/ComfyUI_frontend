@@ -120,7 +120,6 @@ export class SubgraphInput extends SubgraphSlot {
 
     // Set link ID in each slot
     this.linkIds.push(link.id)
-    slot.link = link.id
 
     anchorRerouteChain(subgraph, link)
     subgraph.incrementVersion()

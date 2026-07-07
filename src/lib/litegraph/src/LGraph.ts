@@ -25,7 +25,6 @@ import { forEachNode } from '@/utils/graphTraversalUtil'
 import {
   groupLinksByTuple,
   purgeOrphanedLinks,
-  repairInputLinks,
   selectSurvivorLink
 } from './linkDeduplication'
 
@@ -1707,7 +1706,6 @@ export class LGraph
       const keepId = selectSurvivorLink(ids, node)
 
       purgeOrphanedLinks(ids, keepId, this)
-      repairInputLinks(ids, keepId, node)
     }
   }
 
