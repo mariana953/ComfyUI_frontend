@@ -330,8 +330,7 @@ function withComfyMatchType(node: LGraphNode): asserts node is MatchTypeNode {
         (inp) => inp.name in matchGroup
       )
       const connectedTypes = groupInputs.map((inp) => {
-        if (!inp.link) return '*'
-        const link = this.graph!.links[inp.link]
+        const link = this.getInputLink(this.inputs.indexOf(inp))
         if (!link) return '*'
         const { output, subgraphInput } = link.resolve(this.graph!)
         return (output ?? subgraphInput)?.type ?? '*'

@@ -271,7 +271,8 @@ function demoteRow(row: ActiveRow) {
   if (row.kind === 'promoted') {
     const linkedInput = row.input._subgraphSlot
     if (linkedInput) {
-      if (row.input.link != null) linkedInput.disconnect()
+      const inputIndex = subgraphNode.inputs.indexOf(row.input)
+      if (subgraphNode.isInputConnected(inputIndex)) linkedInput.disconnect()
       else subgraphNode.subgraph.removeInput(linkedInput)
     }
     refreshPromotedWidgetRendering()

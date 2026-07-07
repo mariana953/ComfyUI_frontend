@@ -394,7 +394,7 @@ function demotePromotedInput(
   const linkedInput = hostInput?._subgraphSlot
   if (!linkedInput) return false
 
-  if (hostInput.link != null) {
+  if (subgraphNode.isInputConnected(subgraphNode.inputs.indexOf(hostInput))) {
     linkedInput.disconnect()
   } else {
     subgraphNode.subgraph.removeInput(linkedInput)

@@ -102,6 +102,13 @@ function makeOtherWidget(name: string, value: unknown): IBaseWidget {
   })
 }
 
+/** Mocks read connectivity from their own input mock data. */
+function stampInputConnectivity(node: LGraphNode): LGraphNode {
+  return Object.assign(node, {
+    isInputConnected: (slot: number) => node.inputs?.[slot]?.link != null
+  })
+}
+
 /** Helper: create a mock LGraphNode with configured widgets */
 function makeNode(
   id: number,
@@ -109,12 +116,14 @@ function makeNode(
   widgets: IBaseWidget[] = [],
   executionId?: string
 ): LGraphNode {
-  return fromAny<LGraphNode, unknown>({
-    id,
-    type,
-    widgets,
-    _testExecutionId: executionId
-  })
+  return stampInputConnectivity(
+    fromAny<LGraphNode, unknown>({
+      id,
+      type,
+      widgets,
+      _testExecutionId: executionId
+    })
+  )
 }
 
 /** Helper: create a mock LGraph containing given nodes */
@@ -193,6 +202,7 @@ function makeNestedPromotedModelGraph({
     },
     _testExecutionId: innerExecutionId
   })
+  stampInputConnectivity(innerNode)
 
   const outerWidgetId = widgetId('graph', toNodeId(65), 'outer_ckpt')
   useWidgetValueStore().registerWidget(outerWidgetId, {
@@ -230,6 +240,7 @@ function makeNestedPromotedModelGraph({
     },
     _testExecutionId: '65'
   })
+  stampInputConnectivity(outerNode)
 
   return makeGraph([outerNode, innerNode, leafNode])
 }
@@ -337,6 +348,7 @@ describe('scanNodeModelCandidates', () => {
         ]
       }
     })
+    stampInputConnectivity(node)
 
     const result = scanNodeModelCandidates(graph, node, noAssetSupport)
 
@@ -363,6 +375,7 @@ describe('scanNodeModelCandidates', () => {
         ]
       }
     })
+    stampInputConnectivity(node)
 
     const result = scanNodeModelCandidates(
       graph,
@@ -402,6 +415,7 @@ describe('scanNodeModelCandidates', () => {
         ]
       }
     })
+    stampInputConnectivity(node)
 
     const result = scanNodeModelCandidates(
       graph,
@@ -432,6 +446,7 @@ describe('scanNodeModelCandidates', () => {
         ]
       }
     })
+    stampInputConnectivity(node)
 
     const result = scanNodeModelCandidates(graph, node, noAssetSupport)
 
@@ -739,6 +754,7 @@ describe('scanAllModelCandidates', () => {
       mode: 2, // LGraphEventMode.NEVER
       _testExecutionId: '10'
     })
+    stampInputConnectivity(mutedNode)
 
     const graph = makeGraph([mutedNode])
     const result = scanAllModelCandidates(graph, noAssetSupport)
@@ -756,6 +772,7 @@ describe('scanAllModelCandidates', () => {
       mode: 4, // LGraphEventMode.BYPASS
       _testExecutionId: '11'
     })
+    stampInputConnectivity(bypassedNode)
 
     const graph = makeGraph([bypassedNode])
     const result = scanAllModelCandidates(graph, noAssetSupport)
@@ -773,6 +790,7 @@ describe('scanAllModelCandidates', () => {
       mode: 0, // LGraphEventMode.ALWAYS
       _testExecutionId: '12'
     })
+    stampInputConnectivity(activeNode)
 
     const graph = makeGraph([activeNode])
     const result = scanAllModelCandidates(graph, noAssetSupport)
@@ -848,6 +866,7 @@ describe('scanAllModelCandidates', () => {
       },
       _testExecutionId: '65'
     })
+    stampInputConnectivity(hostNode)
 
     const isAssetSupported = vi.fn(() => false)
     const graph = makeGraph([hostNode, interiorNode])
@@ -925,6 +944,7 @@ describe('scanAllModelCandidates', () => {
       },
       _testExecutionId: '65'
     })
+    stampInputConnectivity(hostNode)
 
     const result = scanAllModelCandidates(
       makeGraph([hostNode, interiorNode]),
@@ -1000,6 +1020,7 @@ describe('scanAllModelCandidates', () => {
       },
       _testExecutionId: '65:77'
     })
+    stampInputConnectivity(innerNode)
 
     const outerWidgetId = widgetId('graph', toNodeId(65), 'outer_ckpt')
     useWidgetValueStore().registerWidget(outerWidgetId, {
@@ -1037,6 +1058,7 @@ describe('scanAllModelCandidates', () => {
       },
       _testExecutionId: '65'
     })
+    stampInputConnectivity(outerNode)
 
     const isAssetSupported = vi.fn(() => false)
     const graph = makeGraph([outerNode, innerNode, leafNode])
