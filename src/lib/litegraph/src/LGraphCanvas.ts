@@ -27,7 +27,12 @@ import type { NodeProperty } from './LGraphNode'
 import { parseNodeId, serializeNodeId } from '@/types/nodeId'
 import type { SerializedNodeId } from '@/types/nodeId'
 import { LLink, slotFloatingLinks } from './LLink'
-import { outputLinks } from './node/slotLinks'
+import {
+  inputHasLink,
+  inputLinkId,
+  outputLinkIds,
+  outputLinks
+} from './node/slotLinks'
 import type { LinkId } from './LLink'
 import { Reroute } from './Reroute'
 import type { RerouteId } from './Reroute'
@@ -2834,7 +2839,7 @@ export class LGraphCanvas implements CustomEventDispatcher<LGraphCanvasEventMap>
               e.altKey &&
               !e.shiftKey
             if (
-              input.link !== null ||
+              inputHasLink(graph, node.id, i) ||
               slotFloatingLinks(graph, 'input', node.id, i).length > 0
             ) {
               // Existing link
@@ -4597,16 +4602,19 @@ export class LGraphCanvas implements CustomEventDispatcher<LGraphCanvasEventMap>
     this.onNodeSelected?.(item)
 
     // Highlight links
-    if (item.inputs) {
-      for (const input of item.inputs) {
-        if (input.link == null) continue
-        this.highlighted_links[input.link] = true
+    const { graph: highlightGraph } = this
+    if (item.inputs && highlightGraph) {
+      for (const [i] of item.inputs.entries()) {
+        const linkId = inputLinkId(highlightGraph, item.id, i)
+        if (linkId == null) continue
+        this.highlighted_links[linkId] = true
       }
     }
-    if (item.outputs) {
-      for (const id of item.outputs.flatMap((x) => x.links)) {
-        if (id == null) continue
-        this.highlighted_links[id] = true
+    if (item.outputs && highlightGraph) {
+      for (const [i] of item.outputs.entries()) {
+        for (const id of outputLinkIds(highlightGraph, item.id, i)) {
+          this.highlighted_links[id] = true
+        }
       }
     }
   }
@@ -4653,19 +4661,20 @@ export class LGraphCanvas implements CustomEventDispatcher<LGraphCanvasEventMap>
 
     // Clear link highlight
     if (item.inputs) {
-      for (const input of item.inputs) {
-        if (input.link == null) continue
+      for (const [i] of item.inputs.entries()) {
+        const linkId = inputLinkId(graph, item.id, i)
+        if (linkId == null) continue
 
-        const node = LLink.getOriginNode(graph, input.link)
+        const node = LLink.getOriginNode(graph, linkId)
         if (node && this.selectedItems.has(node)) continue
 
-        delete this.highlighted_links[input.link]
+        delete this.highlighted_links[linkId]
       }
     }
     if (item.outputs) {
-      for (const id of item.outputs.flatMap((x) => x.links)) {
-        if (id == null) continue
-
+      for (const id of item.outputs.flatMap((_x, i) =>
+        outputLinkIds(graph, item.id, i)
+      )) {
         const node = LLink.getTargetNode(graph, id)
         if (node && this.selectedItems.has(node)) continue
 
@@ -4791,14 +4800,18 @@ export class LGraphCanvas implements CustomEventDispatcher<LGraphCanvasEventMap>
       if (oldNode) this.selected_nodes[oldNode.id] = oldNode
 
       // Highlight links
-      if (keepSelected.inputs) {
-        for (const input of keepSelected.inputs) {
-          if (input.link == null) continue
-          this.highlighted_links[input.link] = true
+      const { graph: rehighlightGraph } = this
+      if (keepSelected.inputs && rehighlightGraph) {
+        for (const [i] of keepSelected.inputs.entries()) {
+          const linkId = inputLinkId(rehighlightGraph, keepSelected.id, i)
+          if (linkId == null) continue
+          this.highlighted_links[linkId] = true
         }
       }
-      if (keepSelected.outputs) {
-        for (const id of keepSelected.outputs.flatMap((x) => x.links)) {
+      if (keepSelected.outputs && rehighlightGraph) {
+        for (const id of keepSelected.outputs.flatMap((_x, i) =>
+          outputLinkIds(rehighlightGraph, keepSelected.id, i)
+        )) {
           if (id == null) continue
           this.highlighted_links[id] = true
         }

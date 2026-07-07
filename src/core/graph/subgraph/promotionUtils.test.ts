@@ -13,7 +13,6 @@ import {
 import type { IBaseWidget } from '@/lib/litegraph/src/types/widgets'
 import { usePreviewExposureStore } from '@/stores/previewExposureStore'
 import { useWidgetValueStore } from '@/stores/widgetValueStore'
-import { toLinkId } from '@/types/linkId'
 import type { WidgetId } from '@/types/widgetId'
 
 function promotedInputNames(host: {
@@ -753,7 +752,10 @@ describe('demoteWidget — axiomatic projection retraction', () => {
   it('drops projection but keeps slot and external link when host slot is externally connected', () => {
     const { host, interiorNode, interiorWidget } = setupPromotedWidget()
     const hostInput = host.inputs[0]
-    hostInput.link = toLinkId(9999)
+    const source = new LGraphNode('External Source')
+    source.addOutput('out', 'STRING')
+    host.graph!.add(source)
+    const externalLink = source.connect(0, host, 0)!
     const promotedInputId = hostInput.widgetId
 
     expect(host.subgraph.inputs).toHaveLength(1)
@@ -762,7 +764,7 @@ describe('demoteWidget — axiomatic projection retraction', () => {
     demoteWidget(interiorNode, interiorWidget, [host])
 
     expect(host.subgraph.inputs).toHaveLength(1)
-    expect(host.inputs[0]?.link).toBe(9999)
+    expect(host.inputs[0]?.link).toBe(externalLink.id)
     expect(host.inputs[0]?._widget).toBeUndefined()
     expect(interiorNode.inputs[0]?.link).toBeNull()
     expect(host.widgets).toHaveLength(0)
@@ -795,8 +797,8 @@ describe('demoteWidget — axiomatic projection retraction', () => {
     const { host: innerHost } = buildDuplicateNamePromotion()
 
     const outerSubgraph = createTestSubgraph()
-    const outerHost = createTestSubgraphNode(outerSubgraph)
     outerSubgraph.add(innerHost)
+    const outerHost = createTestSubgraphNode(outerSubgraph)
 
     for (const input of innerHost.inputs) {
       expect(
@@ -868,8 +870,8 @@ describe('disambiguated nested promotion identity', () => {
     const { host: innerHost } = buildDuplicateNamePromotion()
 
     const outerSubgraph = createTestSubgraph()
-    const outerHost = createTestSubgraphNode(outerSubgraph)
     outerSubgraph.add(innerHost)
+    const outerHost = createTestSubgraphNode(outerSubgraph)
 
     for (const input of innerHost.inputs) {
       expect(

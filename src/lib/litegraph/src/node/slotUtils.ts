@@ -9,7 +9,7 @@ import type {
   INodeSlot,
   IWidget
 } from '@/lib/litegraph/src/litegraph'
-import { outputLinkIds } from '@/lib/litegraph/src/node/slotLinks'
+import { inputLinkId, outputLinkIds } from '@/lib/litegraph/src/node/slotLinks'
 import type {
   ISerialisableNodeInput,
   ISerialisableNodeOutput
@@ -50,12 +50,16 @@ function shallowCloneCommonProps(slot: CommonIoSlotProps): CommonIoSlotProps {
 }
 
 export function inputAsSerialisable(
-  slot: INodeInputSlot
+  slot: INodeInputSlot,
+  node: LGraphNode,
+  slotIndex: number
 ): ISerialisableNodeInput {
-  const { link } = slot
   const widgetOrPos = slot.widget
     ? { widget: { name: slot.widget.name } }
     : { pos: slot.pos }
+  const link = node.graph
+    ? (inputLinkId(node.graph, node.id, slotIndex) ?? null)
+    : null
 
   return {
     ...shallowCloneCommonProps(slot),

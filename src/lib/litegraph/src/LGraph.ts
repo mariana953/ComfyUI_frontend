@@ -14,7 +14,7 @@ import { toLinkId } from '@/types/linkId'
 import { toRerouteId } from '@/types/rerouteId'
 import { useLinkStore } from '@/stores/linkStore'
 import { useRerouteStore } from '@/stores/rerouteStore'
-import { outputLinks } from './node/slotLinks'
+import { inputHasLink, outputLinks } from './node/slotLinks'
 import { useNodeBadgeStore } from '@/stores/nodeBadgeStore'
 import { usePreviewExposureStore } from '@/stores/previewExposureStore'
 import { useWidgetValueStore } from '@/stores/widgetValueStore'
@@ -702,8 +702,8 @@ export class LGraph
       // num of input connections
       let num = 0
       if (node.inputs) {
-        for (const input of node.inputs) {
-          if (input?.link != null) {
+        for (const [slot] of node.inputs.entries()) {
+          if (inputHasLink(this, node.id, slot)) {
             num += 1
           }
         }
@@ -1111,8 +1111,8 @@ export class LGraph
 
     // disconnect inputs
     if (inputs) {
-      for (const [i, slot] of inputs.entries()) {
-        if (slot.link != null) node.disconnectInput(i, true)
+      for (const [i] of inputs.entries()) {
+        if (inputHasLink(this, node.id, i)) node.disconnectInput(i, true)
       }
     }
 

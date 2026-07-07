@@ -9,6 +9,7 @@ import type {
 } from '@/lib/litegraph/src/interfaces'
 import { LiteGraph } from '@/lib/litegraph/src/litegraph'
 import { NodeSlot } from '@/lib/litegraph/src/node/NodeSlot'
+import { inputHasLink, inputLinkId } from '@/lib/litegraph/src/node/slotLinks'
 import type { IDrawOptions } from '@/lib/litegraph/src/node/NodeSlot'
 import type { SubgraphInput } from '@/lib/litegraph/src/subgraph/SubgraphInput'
 import type { SubgraphOutput } from '@/lib/litegraph/src/subgraph/SubgraphOutput'
@@ -47,7 +48,9 @@ export class NodeInputSlot extends NodeSlot implements INodeInputSlot {
   }
 
   override get isConnected(): boolean {
-    return this.link != null
+    const { graph } = this._node
+    if (!graph) return false
+    return inputHasLink(graph, this._node.id, this._node.inputs.indexOf(this))
   }
 
   override isValidTarget(
@@ -81,9 +84,13 @@ export class NodeInputSlot extends NodeSlot implements INodeInputSlot {
   }
 
   override toJSON(): INodeInputSlot {
+    const { graph } = this._node
     return {
       ...super.toJSON(),
-      link: this.link,
+      link: graph
+        ? (inputLinkId(graph, this._node.id, this._node.inputs.indexOf(this)) ??
+          null)
+        : null,
       widget: this.widget
     }
   }
