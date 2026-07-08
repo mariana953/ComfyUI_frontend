@@ -1,7 +1,6 @@
 import _ from 'es-toolkit/compat'
 
 import type { ColorOption, LGraph } from '@/lib/litegraph/src/litegraph'
-import { toLinkId } from '@/types/linkId'
 import type { ExecutedWsMessage } from '@/schemas/apiSchema'
 import {
   LGraphCanvas,
@@ -14,8 +13,7 @@ import {
 import type {
   ExportedSubgraph,
   ISerialisableNodeInput,
-  ISerialisedGraph,
-  SerialisableGraph
+  ISerialisedGraph
 } from '@/lib/litegraph/src/types/serialisation'
 import type {
   IBaseWidget,
@@ -208,58 +206,6 @@ export function migrateWidgetsValues<TWidgetValue>(
     return widgetsValues
 
   return widgetsValues.filter((_, index) => !widgetIndexHasForceInput[index])
-}
-
-/**
- * Fix link input slots after loading a graph. Because the node inputs follows
- * the node definition after 1.16, the node inputs array from previous versions,
- * might get added items in the middle, which can cause shift to link's slot index.
- * For example, the node inputs definition is:
- * "required": {
- *   "input1": ["INT", { forceInput: true }],
- *   "input2": ["MODEL", { forceInput: false }],
- *   "input3": ["MODEL", { forceInput: false }]
- * }
- *
- * previously node inputs array was:
- * [{name: 'input2'}, {name: 'input3'}, {name: 'input1'}]
- * because input1 is created as widget first, then convert to input socket after
- * input 2 and 3.
- *
- * Now, the node inputs array just follows the definition order:
- * [{name: 'input1'}, {name: 'input2'}, {name: 'input3'}]
- *
- * We need to update the slot index of corresponding links to match the new
- * node inputs array order.
- *
- * Ref: https://github.com/Comfy-Org/ComfyUI_frontend/issues/3348
- *
- * @param graph - The graph to fix links for.
- */
-export function fixLinkInputSlots(
-  graph: LGraph,
-  data: ISerialisedGraph | SerialisableGraph
-) {
-  // The slot association lives in the serialized node data: node.configure
-  // reorders each serialized inputs array to definition order in place, and
-  // each entry still carries the link id it was saved with. Links are stored
-  // in their respective graph/subgraph.
-  for (const serialisedNode of data.nodes ?? []) {
-    for (const [inputIndex, input] of (serialisedNode.inputs ?? []).entries()) {
-      if (input.link == null) continue
-
-      const link = graph.links.get(toLinkId(input.link))
-      if (!link) continue
-
-      link.target_slot = inputIndex
-    }
-  }
-
-  // Recursively fix links in subgraph definitions
-  for (const subgraphData of data.definitions?.subgraphs ?? []) {
-    const subgraph = graph.rootGraph.subgraphs.get(subgraphData.id)
-    if (subgraph) fixLinkInputSlots(subgraph, subgraphData)
-  }
 }
 
 /**

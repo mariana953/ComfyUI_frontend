@@ -1,9 +1,11 @@
+import { toLinkId } from '@/types/linkId'
 import { registerLinkTopology } from './LLink'
 import { inputLinkId } from './node/slotLinks'
 
 import type { LGraph } from './LGraph'
 import type { LGraphNode } from './LGraphNode'
 import type { LLink, LinkId } from './LLink'
+import type { ISerialisedNode } from './types/serialisation'
 
 /** Generates a unique string key for a link's connection tuple. */
 function linkTupleKey(link: LLink): string {
@@ -64,4 +66,28 @@ export function purgeOrphanedLinks(
   // removes that entry, so re-assert the survivor's registration afterwards.
   const survivor = graph._links.get(keepId)
   if (survivor) registerLinkTopology(graph, survivor)
+}
+
+/**
+ * Re-points each link's `target_slot` at the index of the serialized input
+ * that references it. Node `configure()` overrides may reorder a node's
+ * serialized inputs in place to match the current node definition (e.g.
+ * widget-to-input conversions, Comfy-Org/ComfyUI_frontend#3348), invalidating
+ * the slot indices stored on links.
+ *
+ * @param graph The graph whose links to realign
+ * @param nodesData The serialized node data the graph's nodes were configured
+ * from, after any in-place input reordering by node `configure()` overrides
+ */
+export function realignInputLinkSlots(
+  graph: LGraph,
+  nodesData: Iterable<ISerialisedNode>
+): void {
+  for (const nodeData of nodesData) {
+    for (const [slot, input] of (nodeData.inputs ?? []).entries()) {
+      if (input.link == null) continue
+      const link = graph._links.get(toLinkId(input.link))
+      if (link && link.target_slot !== slot) link.target_slot = slot
+    }
+  }
 }

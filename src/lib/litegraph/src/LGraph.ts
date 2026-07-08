@@ -25,6 +25,7 @@ import { forEachNode } from '@/utils/graphTraversalUtil'
 import {
   groupLinksByTuple,
   purgeOrphanedLinks,
+  realignInputLinkSlots,
   selectSurvivorLink
 } from './linkDeduplication'
 
@@ -2704,6 +2705,12 @@ export class LGraph
       // This repairs corrupted data where extra link objects were created
       // without proper cleanup of the previous connection.
       this._removeDuplicateLinks()
+
+      // Node configure() overrides may have reordered serialized inputs in
+      // place to match current node definitions; re-key links to the slots
+      // that reference them. Uses nodeDataMap: the effective (possibly
+      // deduplicated-clone) data nodes were actually configured from.
+      realignInputLinkSlots(this, nodeDataMap.values())
 
       // groups
       this._groups.length = 0
