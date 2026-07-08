@@ -14,7 +14,7 @@ import { toLinkId } from '@/types/linkId'
 import { toRerouteId } from '@/types/rerouteId'
 import { useLinkStore } from '@/stores/linkStore'
 import { useRerouteStore } from '@/stores/rerouteStore'
-import { inputHasLink, outputLinks } from './node/slotLinks'
+import { inputHasLink, inputLinkId, outputLinks } from './node/slotLinks'
 import { useNodeBadgeStore } from '@/stores/nodeBadgeStore'
 import { usePreviewExposureStore } from '@/stores/previewExposureStore'
 import { useWidgetValueStore } from '@/stores/widgetValueStore'
@@ -2091,7 +2091,7 @@ export class LGraph
     for (const [, link] of subgraphNode.subgraph._links) {
       let externalParentId: RerouteId | undefined
       if (link.origin_id === SUBGRAPH_INPUT_ID) {
-        const outerLinkId = subgraphNode.inputs[link.origin_slot].link
+        const outerLinkId = inputLinkId(this, subgraphNode.id, link.origin_slot)
         if (!outerLinkId) {
           console.error('Missing Link ID when unpacking')
           continue

@@ -6044,48 +6044,41 @@ export class LGraphCanvas implements CustomEventDispatcher<LGraphCanvasEventMap>
       node.arrange()
     }
 
-    for (const node of nodes) {
-      // for every input (we render just inputs because it is easier as every slot can only have one input)
-      const { inputs } = node
-      if (!inputs?.length) continue
+    // Render every link at its target input (each input holds at most one link).
+    for (const link of graph._links.values()) {
+      const node = graph.getNodeById(link.target_id)
+      const input = node?.inputs[link.target_slot]
+      if (!node || !input) continue
 
-      for (const [i, input] of inputs.entries()) {
-        if (!input || input.link == null) continue
+      const endPos: Point = LiteGraph.vueNodesMode // TODO: still use LG get pos if vue nodes is off until stable
+        ? getSlotPosition(node, link.target_slot, true)
+        : node.getInputPos(link.target_slot)
 
-        const link_id = input.link
-        const link = graph._links.get(link_id)
-        if (!link) continue
+      // find link info
+      const start_node = graph.getNodeById(link.origin_id)
+      if (start_node == null) continue
 
-        const endPos: Point = LiteGraph.vueNodesMode // TODO: still use LG get pos if vue nodes is off until stable
-          ? getSlotPosition(node, i, true)
-          : node.getInputPos(i)
+      const outputId = link.origin_slot
+      const startPos: Point =
+        outputId === -1
+          ? [start_node.pos[0] + 10, start_node.pos[1] + 10]
+          : LiteGraph.vueNodesMode // TODO: still use LG get pos if vue nodes is off until stable
+            ? getSlotPosition(start_node, outputId, false)
+            : start_node.getOutputPos(outputId)
 
-        // find link info
-        const start_node = graph.getNodeById(link.origin_id)
-        if (start_node == null) continue
+      const output = start_node.outputs[outputId]
+      if (!output) continue
 
-        const outputId = link.origin_slot
-        const startPos: Point =
-          outputId === -1
-            ? [start_node.pos[0] + 10, start_node.pos[1] + 10]
-            : LiteGraph.vueNodesMode // TODO: still use LG get pos if vue nodes is off until stable
-              ? getSlotPosition(start_node, outputId, false)
-              : start_node.getOutputPos(outputId)
-
-        const output = start_node.outputs[outputId]
-        if (!output) continue
-
-        this._renderAllLinkSegments(
-          ctx,
-          link,
-          startPos,
-          endPos,
-          visibleReroutes,
-          now,
-          output.dir,
-          input.dir
-        )
-      }
+      this._renderAllLinkSegments(
+        ctx,
+        link,
+        startPos,
+        endPos,
+        visibleReroutes,
+        now,
+        output.dir,
+        input.dir
+      )
     }
 
     if (subgraph) {

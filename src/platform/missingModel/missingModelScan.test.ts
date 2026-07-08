@@ -195,7 +195,12 @@ function makeNestedPromotedModelGraph({
       },
       getLink: (id: number) =>
         id === innerLinkId
-          ? { resolve: () => ({ inputNode: leafNode }) }
+          ? {
+              resolve: () => ({
+                inputNode: leafNode,
+                input: leafNode.inputs[0]
+              })
+            }
           : null,
       getNodeById: (id: string | number) =>
         String(id) === String(leafNode.id) ? leafNode : null
@@ -233,7 +238,12 @@ function makeNestedPromotedModelGraph({
       },
       getLink: (id: number) =>
         id === outerLinkId
-          ? { resolve: () => ({ inputNode: innerNode }) }
+          ? {
+              resolve: () => ({
+                inputNode: innerNode,
+                input: innerNode.inputs[0]
+              })
+            }
           : null,
       getNodeById: (id: string | number) =>
         String(id) === String(innerNode.id) ? innerNode : null
@@ -859,7 +869,12 @@ describe('scanAllModelCandidates', () => {
         },
         getLink: (id: number) =>
           id === linkId
-            ? { resolve: () => ({ inputNode: interiorNode }) }
+            ? {
+                resolve: () => ({
+                  inputNode: interiorNode,
+                  input: interiorNode.inputs[0]
+                })
+              }
             : null,
         getNodeById: (id: string | number) =>
           String(id) === String(interiorNode.id) ? interiorNode : null
@@ -937,7 +952,12 @@ describe('scanAllModelCandidates', () => {
         },
         getLink: (id: number) =>
           id === linkId
-            ? { resolve: () => ({ inputNode: interiorNode }) }
+            ? {
+                resolve: () => ({
+                  inputNode: interiorNode,
+                  input: interiorNode.inputs[0]
+                })
+              }
             : null,
         getNodeById: (id: string | number) =>
           String(id) === String(interiorNode.id) ? interiorNode : null
@@ -1013,7 +1033,12 @@ describe('scanAllModelCandidates', () => {
         },
         getLink: (id: number) =>
           id === innerLinkId
-            ? { resolve: () => ({ inputNode: leafNode }) }
+            ? {
+                resolve: () => ({
+                  inputNode: leafNode,
+                  input: leafNode.inputs[0]
+                })
+              }
             : null,
         getNodeById: (id: string | number) =>
           String(id) === String(leafNode.id) ? leafNode : null
@@ -1051,7 +1076,12 @@ describe('scanAllModelCandidates', () => {
         },
         getLink: (id: number) =>
           id === outerLinkId
-            ? { resolve: () => ({ inputNode: innerNode }) }
+            ? {
+                resolve: () => ({
+                  inputNode: innerNode,
+                  input: innerNode.inputs[0]
+                })
+              }
             : null,
         getNodeById: (id: string | number) =>
           String(id) === String(innerNode.id) ? innerNode : null

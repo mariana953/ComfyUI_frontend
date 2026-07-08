@@ -83,7 +83,7 @@ function createTestLink(
   return link
 }
 
-describe('drawConnections widget-input slot positioning', () => {
+describe('drawConnections', () => {
   let graph: LGraph
   let canvas: LGraphCanvas
   let canvasElement: HTMLCanvasElement
@@ -172,6 +172,31 @@ describe('drawConnections widget-input slot positioning', () => {
     canvas.drawConnections(createMockCtx())
 
     expect(arrangeSpy).not.toHaveBeenCalled()
+  })
+
+  it('never reads the deprecated slot link mirrors in a connect-draw-serialize cycle', () => {
+    const deprecationCallback = vi.fn()
+    const originalCallbacks = LiteGraph.onDeprecationWarning
+    LiteGraph.onDeprecationWarning = [deprecationCallback]
+    LiteGraph.alwaysRepeatWarnings = true
+    try {
+      const sourceNode = new LGraphNode('Source')
+      sourceNode.addOutput('out', 'STRING')
+      graph.add(sourceNode)
+
+      const targetNode = new LGraphNode('Target')
+      targetNode.addInput('in', 'STRING')
+      graph.add(targetNode)
+
+      sourceNode.connect(0, targetNode, 0)
+      canvas.drawConnections(createMockCtx())
+      graph.asSerialisable()
+
+      expect(deprecationCallback).not.toHaveBeenCalled()
+    } finally {
+      LiteGraph.onDeprecationWarning = originalCallbacks
+      LiteGraph.alwaysRepeatWarnings = false
+    }
   })
 
   it('positions widget-input slots when display name differs from slot.widget.name', () => {
