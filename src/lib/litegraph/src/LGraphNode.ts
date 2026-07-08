@@ -84,7 +84,6 @@ import { NodeInputSlot } from './node/NodeInputSlot'
 import { NodeOutputSlot } from './node/NodeOutputSlot'
 import {
   inputAsSerialisable,
-  isINodeInputSlot,
   isWidgetInputSlot,
   outputAsSerialisable
 } from './node/slotUtils'
@@ -143,12 +142,6 @@ interface ConnectByTypeOptions {
   typedToWildcard?: boolean
   /** The {@link Reroute.id} that the connection is being dragged from. */
   afterRerouteId?: RerouteId
-}
-
-/** Internal type used for type safety when implementing generic checks for inputs & outputs */
-interface IGenericLinkOrLinks {
-  links?: INodeOutputSlot['links']
-  link?: INodeInputSlot['link']
 }
 
 interface FindFreeSlotOptions {
@@ -1647,10 +1640,13 @@ export class LGraphNode
     type: ISlotType,
     extra_info?: TProperties
   ): INodeOutputSlot & TProperties {
+    // Legacy save-and-re-add patterns pass a stale `links` mirror; drop it so
+    // Object.assign cannot hit the deprecated prototype accessor.
+    const { links: _staleLinks, ...extraProps } = { ...extra_info }
     const output = Object.assign(
-      new NodeOutputSlot({ name, type, links: null }, this),
-      extra_info
-    )
+      new NodeOutputSlot({ name, type }, this),
+      extraProps
+    ) as NodeOutputSlot & TProperties
 
     this.outputs ||= []
     this.outputs.push(output)
@@ -1710,10 +1706,13 @@ export class LGraphNode
   ): INodeInputSlot & TProperties {
     type ||= 0
 
+    // Legacy save-and-re-add patterns pass a stale `link` mirror; drop it so
+    // Object.assign cannot hit the deprecated prototype accessor.
+    const { link: _staleLink, ...extraProps } = { ...extra_info }
     const input = Object.assign(
-      new NodeInputSlot({ name, type, link: null }, this),
-      extra_info
-    )
+      new NodeInputSlot({ name, type }, this),
+      extraProps
+    ) as NodeInputSlot & TProperties
 
     this.inputs ||= []
     this.inputs.push(input)
@@ -2394,7 +2393,7 @@ export class LGraphNode
     optsIn?: FindFreeSlotOptions & { returnObj?: TReturn }
   ): INodeInputSlot | -1
   findInputSlotFree(optsIn?: FindFreeSlotOptions) {
-    return this._findFreeSlot(this.inputs, optsIn)
+    return this._findFreeSlot(this.inputs, true, optsIn)
   }
 
   /**
@@ -2409,15 +2408,17 @@ export class LGraphNode
     optsIn?: FindFreeSlotOptions & { returnObj?: TReturn }
   ): INodeOutputSlot | -1
   findOutputSlotFree(optsIn?: FindFreeSlotOptions) {
-    return this._findFreeSlot(this.outputs, optsIn)
+    return this._findFreeSlot(this.outputs, false, optsIn)
   }
 
   /**
    * Finds the next free slot
    * @param slots The slots to search, i.e. this.inputs or this.outputs
+   * @param isInput Whether {@link slots} are inputs (`true`) or outputs (`false`)
    */
   private _findFreeSlot<TSlot extends INodeInputSlot | INodeOutputSlot>(
     slots: TSlot[],
+    isInput: boolean,
     options?: FindFreeSlotOptions
   ): TSlot | number {
     const defaults = {
@@ -2430,7 +2431,9 @@ export class LGraphNode
 
     for (let i = 0; i < length; ++i) {
       const slot: TSlot = slots[i]
-      if (!slot || slotIsConnected(this, slot, i)) continue
+      if (!slot) continue
+      if (isInput ? this.isInputConnected(i) : this.isOutputConnected(i))
+        continue
       if (opts.typesNotAccepted?.includes?.(slot.type)) continue
       return !opts.returnObj ? i : slot
     }
@@ -2460,6 +2463,7 @@ export class LGraphNode
   ) {
     return this._findSlotByType(
       this.inputs,
+      true,
       type,
       returnObj,
       preferFreeSlot,
@@ -2490,6 +2494,7 @@ export class LGraphNode
   ) {
     return this._findSlotByType(
       this.outputs,
+      false,
       type,
       returnObj,
       preferFreeSlot,
@@ -2536,6 +2541,7 @@ export class LGraphNode
     return input
       ? this._findSlotByType(
           this.inputs,
+          true,
           type,
           returnObj,
           preferFreeSlot,
@@ -2543,6 +2549,7 @@ export class LGraphNode
         )
       : this._findSlotByType(
           this.outputs,
+          false,
           type,
           returnObj,
           preferFreeSlot,
@@ -2553,6 +2560,7 @@ export class LGraphNode
   /**
    * Finds a matching slot from those provided, returning the slot itself or its index in {@link slots}.
    * @param slots Slots to search (this.inputs or this.outputs)
+   * @param isInput Whether {@link slots} are inputs (`true`) or outputs (`false`)
    * @param type Type of slot to look for
    * @param returnObj If true, returns the slot itself.  Otherwise, the index.
    * @param preferFreeSlot Prefer a free slot, but if none are found, fall back to an occupied slot.
@@ -2564,6 +2572,7 @@ export class LGraphNode
    */
   private _findSlotByType<TSlot extends INodeInputSlot | INodeOutputSlot>(
     slots: TSlot[],
+    isInput: boolean,
     type: ISlotType,
     returnObj?: boolean,
     preferFreeSlot?: boolean,
@@ -2579,7 +2588,7 @@ export class LGraphNode
     // Run the search
     let occupiedSlot: number | TSlot | null = null
     for (let i = 0; i < length; ++i) {
-      const slot: TSlot & IGenericLinkOrLinks = slots[i]
+      const slot: TSlot = slots[i]
       const destTypes =
         slot.type == '0' || slot.type == '*'
           ? ['0']
@@ -2593,7 +2602,10 @@ export class LGraphNode
           const dest = destType == '_event_' ? LiteGraph.EVENT : destType
 
           if (source == dest || source === '*' || dest === '*') {
-            if (preferFreeSlot && slotIsConnected(this, slot, i)) {
+            if (
+              preferFreeSlot &&
+              (isInput ? this.isInputConnected(i) : this.isOutputConnected(i))
+            ) {
               // In case we can't find a free slot.
               occupiedSlot ??= returnObj ? slot : i
               continue
@@ -3884,9 +3896,12 @@ export class LGraphNode
 
   updateComputedDisabled() {
     if (!this.widgets) return
-    for (const widget of this.widgets)
+    for (const widget of this.widgets) {
+      const slot = this.getSlotFromWidget(widget)
       widget.computedDisabled =
-        widget.disabled || widgetInputConnected(this, widget)
+        widget.disabled ||
+        (!!slot && this.isInputConnected(this.inputs.indexOf(slot)))
+    }
   }
 
   drawWidgets(
@@ -3992,8 +4007,10 @@ export class LGraphNode
     return slots.length ? createBounds(slots, 0) : null
   }
 
-  private _getMouseOverSlot(slot: INodeSlot): INodeSlot | null {
-    const isInput = isINodeInputSlot(slot)
+  private _getMouseOverSlot(
+    slot: NodeInputSlot | NodeOutputSlot
+  ): INodeSlot | null {
+    const isInput = slot instanceof NodeInputSlot
     const mouseOverId = this.mouseOver?.[isInput ? 'inputId' : 'outputId'] ?? -1
     if (mouseOverId === -1) {
       return null
@@ -4001,7 +4018,7 @@ export class LGraphNode
     return isInput ? this.inputs[mouseOverId] : this.outputs[mouseOverId]
   }
 
-  private _isMouseOverSlot(slot: INodeSlot): boolean {
+  private _isMouseOverSlot(slot: NodeInputSlot | NodeOutputSlot): boolean {
     return this._getMouseOverSlot(slot) === slot
   }
 
@@ -4191,6 +4208,10 @@ export class LGraphNode
    * @internal Sets the internal concrete slot arrays, ensuring they are instances of
    * {@link NodeInputSlot} or {@link NodeOutputSlot}.
    *
+   * Upgraded slots are written back into {@link inputs} / {@link outputs}:
+   * the concrete instances resolve their own slot index by identity, so a
+   * wrapper that is not the array entry would always read as disconnected.
+   *
    * A temporary workaround until duck-typed inputs and outputs
    * have been removed from the ecosystem.
    */
@@ -4201,6 +4222,12 @@ export class LGraphNode
     this._concreteOutputs = this.outputs.map((slot) =>
       toClass(NodeOutputSlot, slot, this)
     )
+    for (const [i, slot] of this._concreteInputs.entries()) {
+      this.inputs[i] = slot
+    }
+    for (const [i, slot] of this._concreteOutputs.entries()) {
+      this.outputs[i] = slot
+    }
   }
 
   /**
@@ -4228,21 +4255,4 @@ export class LGraphNode
     ctx.fillRect(0, 0, this.width * this.progress, 6)
     ctx.fillStyle = originalFillStyle
   }
-}
-
-function slotIsConnected(
-  node: LGraphNode,
-  slot: INodeInputSlot | INodeOutputSlot,
-  index: number
-): boolean {
-  if (!node.graph) return false
-  return 'link' in slot
-    ? inputHasLink(node.graph, node.id, index)
-    : outputHasLinks(node.graph, node.id, index)
-}
-
-function widgetInputConnected(node: LGraphNode, widget: IBaseWidget): boolean {
-  const slot = node.getSlotFromWidget(widget)
-  if (!slot || !('link' in slot)) return false
-  return slotIsConnected(node, slot, node.inputs.indexOf(slot))
 }

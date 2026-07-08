@@ -8693,7 +8693,10 @@ export class LGraphCanvas implements CustomEventDispatcher<LGraphCanvasEventMap>
         if (node.getSlotMenuOptions) {
           menu_info = node.getSlotMenuOptions(slot)
         } else {
-          if (slot.output?.links?.length || slot.input?.link != null) {
+          const slotConnected = slot.output
+            ? node.isOutputConnected(slot.slot)
+            : node.isInputConnected(slot.slot)
+          if (slotConnected) {
             menu_info.push({ content: 'Disconnect Links', slot })
           }
 
@@ -8703,7 +8706,7 @@ export class LGraphCanvas implements CustomEventDispatcher<LGraphCanvasEventMap>
               'Both in put and output slots were null when processing context menu.'
             )
 
-          if (!_slot.nameLocked && !('link' in _slot && _slot.widget)) {
+          if (!_slot.nameLocked && !slot.input?.widget) {
             menu_info.push({ content: 'Rename Slot', slot })
           }
 

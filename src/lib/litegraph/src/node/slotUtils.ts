@@ -6,7 +6,6 @@ import type {
 import type {
   INodeInputSlot,
   INodeOutputSlot,
-  INodeSlot,
   IWidget
 } from '@/lib/litegraph/src/litegraph'
 import { inputLinkId, outputLinkIds } from '@/lib/litegraph/src/node/slotLinks'
@@ -85,10 +84,6 @@ export function outputAsSerialisable(
     slot_index,
     links: ids.length ? ids : null
   }
-}
-
-export function isINodeInputSlot(slot: INodeSlot): slot is INodeInputSlot {
-  return 'link' in slot
 }
 
 /**

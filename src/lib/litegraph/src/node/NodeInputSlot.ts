@@ -102,9 +102,10 @@ export class NodeInputSlot extends NodeSlot implements INodeInputSlot {
 }
 
 /**
- * Deprecation telemetry for extensions that still read `input.link`.
- * Returns the store-derived link id; there is deliberately no setter, so
- * writes throw in strict mode. First-party code uses the slotLinks helpers.
+ * Deprecation telemetry for extensions that still touch `input.link`.
+ * Reads return the store-derived link id; writes fire telemetry and are
+ * ignored, since the store cannot be mutated through the mirror.
+ * First-party code uses the slotLinks helpers.
  */
 Object.defineProperty(NodeInputSlot.prototype, 'link', {
   get(this: NodeInputSlot): LinkId | null {
@@ -115,6 +116,11 @@ Object.defineProperty(NodeInputSlot.prototype, 'link', {
     if (!graph) return null
     return (
       inputLinkId(graph, this._node.id, this._node.inputs.indexOf(this)) ?? null
+    )
+  },
+  set(this: NodeInputSlot): void {
+    warnDeprecated(
+      'Assignment to input.link is deprecated and has no effect; connectivity is derived from the link store. Mutate via node.connect() / node.disconnectInput().'
     )
   },
   configurable: true,
