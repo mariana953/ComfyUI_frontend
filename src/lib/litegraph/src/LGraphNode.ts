@@ -3114,33 +3114,45 @@ export class LGraphNode
     if (!graph) return false
     if (!outputHasLinks(graph, this.id, slot)) return false
 
-    if (target_node) {
-      const target =
-        typeof target_node === 'number'
-          ? graph.getNodeById(target_node)
-          : target_node
-      if (!target) throw 'Target Node not found'
+    const onlyTarget =
+      typeof target_node === 'number'
+        ? graph.getNodeById(target_node)
+        : target_node
+    if (target_node && !onlyTarget) throw 'Target Node not found'
 
-      for (const link_info of outputLinks(graph, this.id, slot)) {
-        if (link_info.target_id != target.id) continue
+    for (const link_info of outputLinks(graph, this.id, slot)) {
+      if (onlyTarget && link_info.target_id != onlyTarget.id) continue
 
-        // is the link we are searching for...
-        const input = target.inputs[link_info.target_slot]
-        if (input.widget) {
-          graph.trigger('node:slot-links:changed', {
-            nodeId: target.id,
-            slotType: NodeSlotType.INPUT,
-            slotIndex: link_info.target_slot,
-            connected: false,
-            linkId: link_info.id
-          })
+      if (
+        link_info.target_id === SUBGRAPH_OUTPUT_ID &&
+        graph instanceof Subgraph
+      ) {
+        const targetSlot = graph.outputNode.slots[link_info.target_slot]
+        if (targetSlot) {
+          targetSlot.linkIds.length = 0
+        } else {
+          console.error('Missing subgraphOutput slot when disconnecting link')
         }
+      }
 
-        // remove the link from the links pool
-        link_info.disconnect(graph, 'input')
-        graph.incrementVersion()
+      const target = graph.getNodeById(link_info.target_id)
+      const input = target?.inputs[link_info.target_slot]
+      if (target && input?.widget) {
+        graph.trigger('node:slot-links:changed', {
+          nodeId: target.id,
+          slotType: NodeSlotType.INPUT,
+          slotIndex: link_info.target_slot,
+          connected: false,
+          linkId: link_info.id
+        })
+      }
 
-        // link_info hasn't been modified so its ok
+      // remove the link from the links pool
+      link_info.disconnect(graph, 'input')
+      graph.incrementVersion()
+
+      // link_info hasn't been modified so its ok
+      if (target && input) {
         target.onConnectionsChange?.(
           NodeSlotType.INPUT,
           link_info.target_slot,
@@ -3148,66 +3160,16 @@ export class LGraphNode
           link_info,
           input
         )
-        this.onConnectionsChange?.(
-          NodeSlotType.OUTPUT,
-          slot,
-          false,
-          link_info,
-          output
-        )
-
-        break
       }
-    } else {
-      // all the links in this output slot
-      for (const link_info of outputLinks(graph, this.id, slot)) {
-        if (
-          link_info.target_id === SUBGRAPH_OUTPUT_ID &&
-          graph instanceof Subgraph
-        ) {
-          const targetSlot = graph.outputNode.slots[link_info.target_slot]
-          if (targetSlot) {
-            targetSlot.linkIds.length = 0
-          } else {
-            console.error('Missing subgraphOutput slot when disconnecting link')
-          }
-        }
+      this.onConnectionsChange?.(
+        NodeSlotType.OUTPUT,
+        slot,
+        false,
+        link_info,
+        output
+      )
 
-        const target = graph.getNodeById(link_info.target_id)
-        graph.incrementVersion()
-
-        if (target) {
-          const input = target.inputs[link_info.target_slot]
-          if (input.widget) {
-            graph.trigger('node:slot-links:changed', {
-              nodeId: target.id,
-              slotType: NodeSlotType.INPUT,
-              slotIndex: link_info.target_slot,
-              connected: false,
-              linkId: link_info.id
-            })
-          }
-
-          // link_info hasn't been modified so its ok
-          target.onConnectionsChange?.(
-            NodeSlotType.INPUT,
-            link_info.target_slot,
-            false,
-            link_info,
-            input
-          )
-        }
-        // remove the link from the links pool
-        link_info.disconnect(graph, 'input')
-
-        this.onConnectionsChange?.(
-          NodeSlotType.OUTPUT,
-          slot,
-          false,
-          link_info,
-          output
-        )
-      }
+      if (onlyTarget) break
     }
 
     this.setDirtyCanvas(false, true)
