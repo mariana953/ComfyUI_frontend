@@ -3,12 +3,16 @@ Preview Any - original implement from
 https://github.com/rgthree/rgthree-comfy/blob/main/py/display_any.py
 upstream requested in https://github.com/Kosinkadink/rfcs/blob/main/rfcs/0000-corenodes.md#preview-nodes
  */
+import { whenever } from '@vueuse/core'
+
+import { useChainCallback } from '@/composables/functional/useChainCallback'
 import type { LGraphNode } from '@/lib/litegraph/src/LGraphNode'
 import type { ComfyNodeDef } from '@/schemas/nodeDefSchema'
 import { app } from '@/scripts/app'
 import { type DOMWidget } from '@/scripts/domWidget'
 import { ComfyWidgets } from '@/scripts/widgets'
 import { useExtensionService } from '@/services/extensionService'
+import { useNodeOutputStore } from '@/stores/nodeOutputStore'
 
 useExtensionService().registerExtension({
   name: 'Comfy.PreviewAny',
@@ -75,6 +79,25 @@ useExtensionService().registerExtension({
         showAsPlaintextWidget.widget.options.serialize = false
       }
 
+      const applyValue = (node: LGraphNode, text: string | string[]) => {
+        const previewWidgets =
+          node.widgets?.filter((w) => w.name.startsWith('preview_')) ?? []
+
+        const value = Array.isArray(text) ? (text?.join('\n\n') ?? '') : text
+        for (const previewWidget of previewWidgets) previewWidget.value = value
+      }
+
+      nodeType.prototype.onGraphConfigured = useChainCallback(
+        nodeType.prototype.onGraphConfigured,
+        function (this: LGraphNode) {
+          const outputStore = useNodeOutputStore()
+          whenever(
+            () => outputStore.nodeOutputs[this.id],
+            (output) => applyValue(this, output.text ?? ''),
+            { once: true }
+          )
+        }
+      )
       const onExecuted = nodeType.prototype.onExecuted
 
       nodeType.prototype.onExecuted = function (message) {
@@ -82,15 +105,7 @@ useExtensionService().registerExtension({
           ? void 0
           : onExecuted.apply(this, [message])
 
-        const previewWidgets =
-          this.widgets?.filter((w) => w.name.startsWith('preview_')) ?? []
-
-        for (const previewWidget of previewWidgets) {
-          const text = message.text ?? ''
-          previewWidget.value = Array.isArray(text)
-            ? (text?.join('\n\n') ?? '')
-            : text
-        }
+        applyValue(this, message.text ?? '')
       }
     }
   }
