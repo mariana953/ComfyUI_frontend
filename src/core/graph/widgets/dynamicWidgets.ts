@@ -110,7 +110,7 @@ function dynamicComboWidget(
     if (!node.widgets) throw new Error('Not Reachable')
     const newSpec = value ? options[value] : undefined
 
-    captureCarriedLinks(node)
+    const inputLinks = captureInputLinks(node)
     const removedInputs = remove(node.inputs, isInGroup)
     for (const widget of remove(node.widgets, isInGroup)) {
       widget.onRemove?.()
@@ -165,37 +165,45 @@ function dynamicComboWidget(
         throw new Error('Failed to find input socket for ' + widget.name)
       return
     }
-    const addedInputs = spliceInputs(node, startingInputLength).map(
-      (addedInput) => {
+    const addedInputs = node.inputs
+      .splice(startingInputLength)
+      .map((addedInput) => {
         const existingInput = node.inputs.findIndex(
           (existingInput) => addedInput.name === existingInput.name
         )
         return existingInput === -1
           ? addedInput
-          : spliceInputs(node, existingInput, 1)[0]
-      }
-    )
+          : node.inputs.splice(existingInput, 1)[0]
+      })
     //assume existing inputs are in correct order
-    spliceInputs(node, inputInsertionPoint, 0, ...addedInputs)
+    node.inputs.splice(inputInsertionPoint, 0, ...addedInputs)
 
+    const doomedInputs: INodeInputSlot[] = []
+    const transplants: [number, LLink][] = []
     for (const input of removedInputs) {
       const inputIndex = node.inputs.findIndex((inp) => inp.name === input.name)
-      const link = carriedLink(node, input)
+      const link = inputLinks.get(input)
       if (inputIndex === -1) {
-        if (link) node.graph?.removeLink(link.id)
+        //ride through reconciliation at the tail, then disconnect cleanly
         node.inputs.push(input)
-        node.removeInput(node.inputs.length - 1)
-      } else {
-        if (!link) continue
-        link.target_slot = inputIndex
-        node.onConnectionsChange?.(
-          LiteGraph.INPUT,
-          inputIndex,
-          true,
-          link,
-          node.inputs[inputIndex]
-        )
+        doomedInputs.push(input)
+      } else if (link) {
+        inputLinks.set(node.inputs[inputIndex], link)
+        transplants.push([inputIndex, link])
       }
+    }
+    reconcileInputLinks(node, inputLinks)
+    for (const [inputIndex, link] of transplants) {
+      node.onConnectionsChange?.(
+        LiteGraph.INPUT,
+        inputIndex,
+        true,
+        link,
+        node.inputs[inputIndex]
+      )
+    }
+    for (const input of doomedInputs.toReversed()) {
+      node.removeInput(node.inputs.indexOf(input))
     }
 
     node.size[1] = node.computeSize([...node.size])[1]
@@ -248,42 +256,31 @@ export function applyDynamicInputs(
   return true
 }
 
-/**
- * Slot-object → link association carried across the group rebuild shuffles.
- * The deleted `input.link` mirror used to travel with the slot object; this
- * registry replaces it for the duration of a rebuild, refreshed from the
- * link store whenever the inputs array is at rest.
- */
-const carriedLinks = new WeakMap<INodeInputSlot, LLink>()
+type InputLinks = Map<INodeInputSlot, LLink>
 
-function captureCarriedLinks(node: LGraphNode) {
+/**
+ * Snapshot of each input slot's link, keyed by slot object. Must be taken
+ * while the inputs array is at rest (array position == registered
+ * target_slot); the slot objects then carry the association through a
+ * rebuild's array shuffles, as the deleted `input.link` mirror used to.
+ */
+function captureInputLinks(node: LGraphNode): InputLinks {
+  const links: InputLinks = new Map()
   const { graph } = node
-  if (!graph) return
+  if (!graph) return links
   for (const [index, input] of node.inputs.entries()) {
     const link = inputLink(graph, node.id, index)
-    if (link) carriedLinks.set(input, link)
+    if (link) links.set(input, link)
   }
+  return links
 }
 
-function carriedLink(node: LGraphNode, input: INodeInputSlot) {
-  const link = carriedLinks.get(input)
-  return link && node.graph?.getLink(link.id) ? link : undefined
-}
-
-function spliceInputs(
-  node: LGraphNode,
-  startIndex: number,
-  deleteCount = -1,
-  ...toAdd: INodeInputSlot[]
-): INodeInputSlot[] {
-  captureCarriedLinks(node)
-  if (deleteCount < 0) return node.inputs.splice(startIndex)
-  const ret = node.inputs.splice(startIndex, deleteCount, ...toAdd)
-  node.inputs.slice(startIndex).forEach((input, index) => {
-    const link = carriedLink(node, input)
-    if (link) link.target_slot = startIndex + index
-  })
-  return ret
+/** Re-keys every captured link to its slot's final array position. */
+function reconcileInputLinks(node: LGraphNode, links: InputLinks) {
+  for (const [index, input] of node.inputs.entries()) {
+    const link = links.get(input)
+    if (link && link.target_slot !== index) link.target_slot = index
+  }
 }
 
 function changeOutputType(
@@ -445,6 +442,7 @@ function addAutogrowGroup(
   const { max, min, inputSpecs } = node.comfyDynamic.autogrow[groupName]
   if (ordinal >= max) return
 
+  const inputLinks = captureInputLinks(node)
   const namedSpecs = inputSpecs.map((input) => ({
     ...input,
     isOptional: ordinal >= (min ?? 0) || input.isOptional,
@@ -453,7 +451,7 @@ function addAutogrowGroup(
 
   const newInputs = namedSpecs.map((namedSpec) => {
     addNodeInput(node, namedSpec)
-    const input = spliceInputs(node, node.inputs.length - 1, 1)[0]
+    const input = node.inputs.splice(node.inputs.length - 1, 1)[0]
     if (inputSpecs.length !== 1 || (INLINE_INPUTS && !input.widget))
       ensureWidgetForInput(node, input)
     return input
@@ -464,11 +462,8 @@ function addAutogrowGroup(
       node.inputs,
       (inp) => inp.name === newInput.name
     )) {
-      //NOTE: link.target_slot is updated on spliceInputs call
-      const carried = carriedLinks.get(existingInput)
-      if (carried && !carriedLinks.has(newInput)) {
-        carriedLinks.set(newInput, carried)
-      }
+      const link = inputLinks.get(existingInput)
+      if (link && !inputLinks.has(newInput)) inputLinks.set(newInput, link)
     }
   }
 
@@ -482,7 +477,8 @@ function addAutogrowGroup(
     inp.name.startsWith(targetName)
   )
   const insertionIndex = lastIndex === -1 ? node.inputs.length : lastIndex + 1
-  spliceInputs(node, insertionIndex, 0, ...newInputs)
+  node.inputs.splice(insertionIndex, 0, ...newInputs)
+  reconcileInputLinks(node, inputLinks)
   app.canvas?.setDirty(true, true)
 }
 
